@@ -1,4 +1,3 @@
-// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
 import type { NextApiRequest, NextApiResponse } from "next";
 import { match } from "ts-pattern";
 import { createMachine, Interpreter, interpret, InterpreterFrom } from "xstate";
@@ -8,6 +7,18 @@ interface State {
   id: string;
   msisdn?: string;
 }
+
+const orchestrator = createMachine({
+  initial: "start",
+  schema: {
+    context: {} as State,
+    events: {} as { type: "VALIDATION_SETUP" } | { type: "VALIDATION_CHECK" },
+  },
+  states: {
+    start: {},
+    done: {},
+  },
+});
 
 const db: Record<string, State> = {};
 
@@ -58,7 +69,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
             action: "VALIDATION_SETUP",
           });
         }
-        if (otp === 123123) {
+        if (otp === "123123") {
           return res.status(200).json({
             id,
             state: "done",
@@ -73,6 +84,17 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         });
       }
     )
+    .with({ method: "POST", url: "/api/orchestrator/actions/RESTART" }, () => {
+      const { id } = req.body;
+      db[id] = { id };
+
+      return res.status(200).json({
+        id,
+        state: "start",
+        actions: ["VALIDATION_SETUP", "VALIDATION_CHECK"],
+        data: db[id],
+      });
+    })
     .otherwise(() => {
       return res.status(404).json({ name: "not found" });
     });
